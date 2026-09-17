@@ -1,220 +1,118 @@
 # Kehl Vault
-Kehl Vault is a beginner-friendly C and C++ learning project.
-The long-term goal is to build a local, offline password vault while learning how to design and develop a larger C/C++ application step by step.
-Educational notice: This project is not ready for storing real passwords or other sensitive information.## Project Status
-The project is currently in the early C learning phase.
-Implemented so far:
-- C17 and C++20 configuration with CMake
-- C and C++ interoperability
-- C-compatible headers
-- Password length validation
-- Password character analysis
-- Basic password strength calculation
-- Password generator core using externally provided test bytes
-- Entry data model using a C `struct`
-- Fixed-size entry array
-- Entry creation
-- Adding entries
-- Accessing entries through pointers
-- Updating entries
-- Removing entries
-- Basic input validation
-- Basic entry capacity checks
-- Basic error handling through return values
 
-The current implementation stores entries only in memory. No data is written to files yet.
-## Project Goals
-The long-term goal is to create a local, offline password vault with:
-- Vault creation
-- Vault opening
-- Vault locking
-- Entry creation
-- Entry editing
-- Entry deletion
-- Entry search
-- Password generation
-- Clipboard support
-- Auto-lock
-- Settings
-- Graphical user interface
-- Optional command-line interface
-- Cross-platform support
+Kehl Vault is a beginner-friendly C17/C++20 learning project for building a local password-vault application step by step.
 
-The project is intentionally developed step by step instead of implementing all features at once.
-## Learning Goals
-This project is designed to teach the fundamentals of C and C++.
-### C
-- Variables
-- Data types
-- Conditions
-- Loops
-- Functions
-- Arrays
-- Strings
-- `printf`
-- Return values
-- `enum`
-- `struct`
-- Pointers
-- Dynamic memory
-- File I/O
-- Serialization
-- Error codes
-- C-compatible APIs
+> **Educational notice:** The project is not security-reviewed and should not be used to store real passwords or other sensitive information.
 
-### C++
-- Namespaces
-- `std::string`
-- `std::vector`
-- `std::array`
-- References
-- `const`
-- Classes
-- Constructors
-- Destructors
-- RAII
-- Smart pointers
-- STL containers
-- Application architecture
-- C and C++ interoperability
+## Current project state
 
-### Software Engineering
-- CMake
-- Git
-- Unit testing
-- CTest
-- Debugging
-- AddressSanitizer
-- UndefinedBehaviorSanitizer
-- Static analysis
-- Memory safety
-- Cross-platform development
+The current repository contains:
 
-## Current Architecture
-The project is intentionally split between C and C++.``` text
-C++ application
-      |
-      v
-C-compatible header
-      |
-      v
-C core module
-```
+- C17 core modules with C-compatible headers
+- C++20 CLI application integration
+- Heap-backed `EntryList` with CRUD operations and automatic growth
+- Password validation, strength scoring, password generation and passphrase generation
+- OS-backed random-byte acquisition for password generation
+- Persistent vault files
+- Legacy unencrypted vault format (version 1)
+- Encrypted vault format (version 2)
+- Custom SHA-256, HMAC-SHA256, PBKDF2-HMAC-SHA256 and ChaCha20 implementations
+- Constant-time byte comparison for authentication tags
+- Clipboard integration
+- Password reuse / weakness auditing
+- CSV and JSON import/export
+- Committed C++ integration tests in `tests/test_vault.cpp`
 
-The current project structure is:``` text
-kehl-vault/
+The encrypted storage path uses a 16-byte salt, a 12-byte ChaCha20 nonce, PBKDF2-HMAC-SHA256 with 100,000 iterations, separate 32-byte encryption/authentication keys, ChaCha20 payload encryption, and HMAC-SHA256 over the ciphertext.
+
+This cryptographic design is implemented for learning and has **not** received an independent security review. It is therefore not equivalent to a production password manager using a mature, externally reviewed cryptographic library.
+
+The current file format also serializes native C structures directly. That makes the representation dependent on the build ABI and does not yet constitute a deliberately specified, portable wire format.
+
+## Project structure
+
+```text
+kehl_vault/
 ├── CMakeLists.txt
 ├── main.cpp
-├── entry.h
-├── entry.c
-├── password.h
-├── password.c
-└── scripts/
+├── entry.h / entry.c
+├── password.h / password.c
+├── storage.h / storage.c
+├── crypto.h / crypto.c
+├── clipboard.h / clipboard.c
+├── audit.h / audit.c
+├── impex.h / impex.c
+├── CODEBASE_DOCUMENTATION.md
+└── tests/
+    └── test_vault.cpp
 ```
 
-main.cpp
-The C++ entry point of the application.
-It currently demonstrates how the C modules can be used from C++.
-entry.h
-The public C interface for the Entry module.
-It contains:
-the Entry structure,
-Entry-related function declarations,
-C/C++ compatibility handling.
-entry.c
-The implementation of the Entry module.
-It currently provides:
-Entry creation,
-Entry insertion,
-Entry access,
-Entry editing,
-Entry removal,
-Entry list printing.
-password.h
-The public C interface for password-related functionality.
-password.c
-The implementation of password-related functionality.
-It currently provides:
-Password length validation
-Lowercase detection
-Uppercase detection
-Digit detection
-Special-character detection
-Basic password strength calculation
-Password generator core using externally provided bytes
- 
-Building the Project
-Requirements
-CLion
-CMake
-A C compiler
-A C++ compiler
-C17 support
-C++20 support
-The project is currently configured for the MinGW toolchain provided by CLion on Windows.
-Build with CLion
-Open the project in CLion.
-Wait for CMake to finish loading.
-Select the kehl_vault run configuration.
-Choose Build → Build Project.
-Alternatively, use Ctrl+F9.
-Run with CLion
-Run the project using the green Run button or Shift+F10.
-The executable `kehl_vault` is created inside the CMake build directory.
- 
-Current Example Output
-The current program demonstrates Entry creation, pointer access, editing, and removal.
-Example output:``` text
-Entries vor der Bearbeitung:
-----------------------------
-Entry 1
--------
-Titel: Beispielkonto
-Benutzername: mimi@example.com
+## Module overview
 
-Entry 2
--------
-Titel: Schulkonto
-Benutzername: mimi@schule.example
+### Entry management
+`entry.c` provides the `Entry` data model and heap-backed `EntryList`, including initialization, insertion, lookup, update, removal and capacity growth.
 
-Entry 3
--------
-Titel: Testkonto
-Benutzername: test@example.com
+### Password handling
+`password.c` provides rule-based password analysis, strength scoring, OS-backed random-byte acquisition, password generation and passphrase generation. Generated character indexes currently use modulo reduction, so the generator has not been presented as mathematically unbiased.
 
-Entry mit Index 1 wurde gefunden.
+### Persistence
+`storage.c` saves and loads `EntryList` data. Version 1 stores entries without encryption. Version 2 derives two 32-byte keys from the master password and uses ChaCha20 plus HMAC-SHA256 for the payload.
 
-Entries nach der Bearbeitung:
------------------------------
-Entry 1
--------
-Titel: Beispielkonto
-Benutzername: mimi@example.com
+### Cryptography
+`crypto.c` contains the current educational implementations of SHA-256, HMAC-SHA256, PBKDF2-HMAC-SHA256, ChaCha20 and constant-time comparison. The long-term hardening direction is to replace application-owned cryptographic primitives with a maintained cryptographic library.
 
-Entry 2
--------
-Titel: Geaendertes Schulkonto
-Benutzername: neuer-benutzername@example.com
+### Clipboard
+`clipboard.c` uses native Win32 clipboard APIs on Windows and common command-line clipboard tools on POSIX systems (`wl-copy`, `xclip`, `xsel`, `pbcopy`).
 
-Entry 3
--------
-Titel: Testkonto
-Benutzername: test@example.com
+### Security audit
+`audit.c` reports password weakness and reused-password indicators across entries. Its health score is an application heuristic, not a cryptographic assurance metric.
 
-Index 5 wurde korrekt abgelehnt.
+### Import/export
+`impex.c` provides CSV and JSON import/export. Exported credentials may be written in plaintext and must therefore be handled like sensitive data.
 
-Entry mit Index 0 loeschen: erfolgreich.
+## Building
+
+Requirements:
+
+- CMake 4.3+
+- C compiler with C17 support
+- C++ compiler with C++20 support
+- CLion is suitable for local development
+
+Configure and build:
+
+```bash
+cmake -S . -B build
+cmake --build build --parallel
 ```
 
-Passwords are intentionally not printed.
- 
-Security Disclaimer
-This project is not a production-ready password manager.
-Do not store important real-world passwords in it.
-The current project does not provide:
-Encryption
-Secure password storage
-Secure memory handling
-Authenticated file storage
-Cryptographically secure password generation
-Security review
+Run the CLI:
+
+```bash
+./build/kehl_vault
+```
+
+Run the test suite:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+The test executable is also available directly as `build/test_vault` on typical Unix-like builds.
+
+## Security roadmap
+
+The main hardening tasks are:
+
+1. Replace custom cryptographic primitives with a maintained cryptographic library.
+2. Define an explicit portable binary format with fixed-width fields and explicit byte order.
+3. Authenticate integrity-sensitive format metadata, not only the ciphertext payload.
+4. Introduce deliberate secure-zeroization and minimize secret copies in memory.
+5. Improve password-generator index selection to avoid modulo bias.
+6. Add sanitizer, static-analysis and fuzzing pipelines.
+7. Review import/export handling and secret exposure paths.
+8. Obtain an independent security review before any real-secret use.
+
+## License / status
+
+This repository is a personal educational project and is currently evolving. The implementation and format may change without backward-compatibility guarantees.
