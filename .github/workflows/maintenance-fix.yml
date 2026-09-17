@@ -1,0 +1,70 @@
+name: Maintenance Fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/maintenance-fix.yml'
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch NULL handling and focused tests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if old not in s:
+                  raise SystemExit(f'Missing expected text in {path}: {old[:120]!r}')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          replace('password.c', '''int password_is_long_enough(const char* password, int minimum_length) {
+              int password_length = (int)strlen(password);
+''', '''int password_is_long_enough(const char* password, int minimum_length) {
+              if (password == NULL || minimum_length < 0) {
+                  return 0;
+              }
+
+              int password_length = (int)strlen(password);
+''')
+
+          for name in [
+              'password_contains_lower_case',
+              'password_contains_upper_case',
+              'password_contains_digit',
+              'password_contains_special_character'
+          ]:
+              old = f'''int {name}(const char* password) {{\n    for (int index = 0; password[index] != \'\\0\'; index++) {{'''
+              new = f'''int {name}(const char* password) {{\n    if (password == NULL) {{\n        return 0;\n    }}\n\n    for (int index = 0; password[index] != \'\\0\'; index++) {{'''
+              replace('password.c', old, new)
+
+          replace('password.c', '''    int character_set_length = (int)strlen(character_set);\n\n    if (random_bytes == NULL ||''', '''    if (random_bytes == NULL ||''')
+          replace('password.c', '''        output == NULL) {\n        return 0;\n    }\n\n    if (random_bytes_count <= 0 ||''', '''        output == NULL) {\n        return 0;\n    }\n\n    int character_set_length = (int)strlen(character_set);\n\n    if (random_bytes_count <= 0 ||''')
+
+          replace('tests/test_vault.cpp', '''    // Verify invalid inputs\n    assert(password_generate_default(16, generated, 10) == 0); // buffer too small\n''', '''    // Verify invalid inputs\n    assert(password_is_long_enough(NULL, 8) == 0);\n    assert(password_is_long_enough("test", -1) == 0);\n    assert(password_contains_lower_case(NULL) == 0);\n    assert(password_contains_upper_case(NULL) == 0);\n    assert(password_contains_digit(NULL) == 0);\n    assert(password_contains_special_character(NULL) == 0);\n    assert(password_calculate_strength(NULL, 8) == 0);\n    assert(password_generate_from_bytes(NULL, 4, "abc", 4, generated, sizeof(generated)) == 0);\n    assert(password_generate_from_bytes(rng_buf, 4, NULL, 4, generated, sizeof(generated)) == 0);\n    assert(password_generate_default(16, generated, 10) == 0); // buffer too small\n''')
+          PY
+
+      - name: Validate
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add password.c tests/test_vault.cpp
+          git commit -m 'fix: harden password API null handling'
+          git push
