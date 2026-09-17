@@ -3,89 +3,87 @@
 #include <iostream>
 
 int main() {
-    const int maximum_entries = 3;
+    EntryList list;
 
-    Entry entries[maximum_entries];
-    int entry_count = 0;
+    int initialization_successful =
+            entry_list_init(&list, 2);
 
-    entry_add(
-            entries,
-            maximum_entries,
-            &entry_count,
+    if (initialization_successful == 0) {
+        std::cout << "Entry-Liste konnte nicht initialisiert werden.\n";
+        return 1;
+    }
+
+    std::cout << "Startzustand:\n";
+    std::cout << "-------------\n";
+    entry_list_print(&list);
+
+    entry_list_add(
+            &list,
             "Beispielkonto",
             "mimi@example.com",
             "TestPasswort123!"
     );
 
-    entry_add(
-            entries,
-            maximum_entries,
-            &entry_count,
+    entry_list_add(
+            &list,
             "Schulkonto",
             "mimi@schule.example",
             "SchulPasswort456!"
     );
 
-    entry_add(
-            entries,
-            maximum_entries,
-            &entry_count,
+    std::cout << "Nach zwei Entries:\n";
+    std::cout << "------------------\n";
+    entry_list_print(&list);
+
+    std::cout << "Kapazitaet vor dem dritten Entry: "
+              << list.capacity
+              << "\n\n";
+
+    entry_list_add(
+            &list,
             "Testkonto",
             "test@example.com",
             "NochEinTest789!"
     );
 
-    std::cout << "Entries vor der Bearbeitung:\n";
-    std::cout << "----------------------------\n";
-    entry_print_list(entries, entry_count);
+    std::cout << "Nach dem dritten Entry:\n";
+    std::cout << "----------------------\n";
+    entry_list_print(&list);
+
+    std::cout << "Kapazitaet nach dem automatischen Wachsen: "
+              << list.capacity
+              << "\n\n";
 
     Entry* selected_entry =
-            entry_get(entries, entry_count, 1);
+            entry_list_get(&list, 1);
 
     if (selected_entry != nullptr) {
-        std::cout << "Entry mit Index 1 wurde gefunden.\n";
-
         entry_create(
                 selected_entry,
                 "Geaendertes Schulkonto",
                 "neuer-benutzername@example.com",
                 "NeuesPasswort456!"
         );
-    } else {
-        std::cout << "Entry mit Index 1 wurde nicht gefunden.\n";
+
+        std::cout << "Entry mit Index 1 wurde bearbeitet.\n\n";
     }
 
-    std::cout << "\n";
-    std::cout << "Entries nach der Bearbeitung:\n";
-    std::cout << "-----------------------------\n";
-    entry_print_list(entries, entry_count);
+    entry_list_remove(&list, 0);
+
+    std::cout << "Nach dem Loeschen von Entry 1:\n";
+    std::cout << "------------------------------\n";
+    entry_list_print(&list);
 
     Entry* invalid_entry =
-            entry_get(entries, entry_count, 5);
+            entry_list_get(&list, 99);
 
     if (invalid_entry == nullptr) {
-        std::cout << "Index 5 wurde korrekt abgelehnt.\n";
+        std::cout << "Ungueltiger Index wurde korrekt abgelehnt.\n";
     }
 
-    int remove_successful =
-            entry_remove(
-                    entries,
-                    &entry_count,
-                    0
-            );
+    entry_list_destroy(&list);
 
-    std::cout << "\nEntry mit Index 0 loeschen: ";
-
-    if (remove_successful == 1) {
-        std::cout << "erfolgreich.\n";
-    } else {
-        std::cout << "fehlgeschlagen.\n";
-    }
-
-    std::cout << "\n";
-    std::cout << "Entries nach dem Loeschen:\n";
-    std::cout << "--------------------------\n";
-    entry_print_list(entries, entry_count);
+    std::cout << "Entry-Liste wurde freigegeben.\n";
 
     return 0;
 }
