@@ -9,6 +9,9 @@ cmake-build-*/
 *.out
 *.app
 
+
+# API Keys
+*.env
 # Object files
 *.o
 *.obj

@@ -3,29 +3,28 @@
 #include <iostream>
 
 int main() {
-    const char* short_password = "abc";
-    const char* long_password = "abc12345";
+    const char* test_password = "Abc12345!";
 
     const int minimum_length = 8;
 
-    int short_password_is_valid =
-            password_is_long_enough(short_password, minimum_length);
+    int password_score =
+            password_calculate_strength(test_password, minimum_length);
 
-    int long_password_is_valid =
-            password_is_long_enough(long_password, minimum_length);
+    std::cout << "Passwortanalyse\n";
+    std::cout << "---------------\n";
 
-    std::cout << "Test 1: ";
-    if (short_password_is_valid == 1) {
-        std::cout << "Passwort ist lang genug.\n";
+    std::cout << "Punkte: "
+              << password_score
+              << " von 5\n";
+
+    std::cout << "Staerke: ";
+
+    if (password_score <= 2) {
+        std::cout << "schwach\n";
+    } else if (password_score <= 4) {
+        std::cout << "mittel\n";
     } else {
-        std::cout << "Passwort ist zu kurz.\n";
-    }
-
-    std::cout << "Test 2: ";
-    if (long_password_is_valid == 1) {
-        std::cout << "Passwort ist lang genug.\n";
-    } else {
-        std::cout << "Passwort ist zu kurz.\n";
+        std::cout << "stark\n";
     }
 
     return 0;
