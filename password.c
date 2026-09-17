@@ -19,6 +19,10 @@
 #define CHARSET_SPECIAL "!@#$%^&*()-_=+[]{}|;:,.<>?"
 
 int password_is_long_enough(const char* password, int minimum_length) {
+    if (password == NULL || minimum_length < 0) {
+        return 0;
+    }
+
     int password_length = (int)strlen(password);
 
     if (password_length >= minimum_length) {
@@ -29,6 +33,10 @@ int password_is_long_enough(const char* password, int minimum_length) {
 }
 
 int password_contains_lower_case(const char* password) {
+    if (password == NULL) {
+        return 0;
+    }
+
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= 'a' && password[index] <= 'z') {
             return 1;
@@ -39,6 +47,10 @@ int password_contains_lower_case(const char* password) {
 }
 
 int password_contains_upper_case(const char* password) {
+    if (password == NULL) {
+        return 0;
+    }
+
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= 'A' && password[index] <= 'Z') {
             return 1;
@@ -49,6 +61,10 @@ int password_contains_upper_case(const char* password) {
 }
 
 int password_contains_digit(const char* password) {
+    if (password == NULL) {
+        return 0;
+    }
+
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= '0' && password[index] <= '9') {
             return 1;
@@ -59,6 +75,10 @@ int password_contains_digit(const char* password) {
 }
 
 int password_contains_special_character(const char* password) {
+    if (password == NULL) {
+        return 0;
+    }
+
     for (int index = 0; password[index] != '\0'; index++) {
         char character = password[index];
 
@@ -83,6 +103,10 @@ int password_calculate_strength(
         const char* password,
         int minimum_length
 ) {
+    if (password == NULL || minimum_length < 0) {
+        return 0;
+    }
+
     int score = 0;
 
     if (password_is_long_enough(password, minimum_length) == 1) {
@@ -116,13 +140,13 @@ int password_generate_from_bytes(
         char* output,
         int output_size
 ) {
-    int character_set_length = (int)strlen(character_set);
-
     if (random_bytes == NULL ||
         character_set == NULL ||
         output == NULL) {
         return 0;
     }
+
+    int character_set_length = (int)strlen(character_set);
 
     if (random_bytes_count <= 0 ||
         character_set_length <= 0 ||
