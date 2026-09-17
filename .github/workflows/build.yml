@@ -18,8 +18,11 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
-      - name: Build
+      - name: Build application and tests
         run: cmake --build build --parallel
 
-      - name: Run demo
+      - name: Run CTest suite
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run CLI smoke test
         run: ./build/kehl_vault
