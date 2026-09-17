@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 4.3)
 project(kehl_vault LANGUAGES C CXX)
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -8,7 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(kehl_vault main.cpp
+add_executable(kehl_vault
+        main.cpp
         entry.c
         entry.h
         password.c
@@ -42,6 +44,9 @@ add_executable(test_vault
         impex.c
         impex.h
 )
+
+enable_testing()
+add_test(NAME test_vault COMMAND test_vault)
 
 if (WIN32)
     target_link_libraries(kehl_vault bcrypt)
