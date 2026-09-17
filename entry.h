@@ -5,7 +5,55 @@
 extern "C" {
 #endif
 
+#define ENTRY_TITLE_SIZE 64
+#define ENTRY_USERNAME_SIZE 64
+#define ENTRY_PASSWORD_SIZE 64
+
+typedef struct {
+        char title[ENTRY_TITLE_SIZE];
+        char username[ENTRY_USERNAME_SIZE];
+        char password[ENTRY_PASSWORD_SIZE];
+} Entry;
+
 void entry_print_module_status(void);
+
+int entry_create(
+        Entry* entry,
+        const char* title,
+        const char* username,
+        const char* password
+);
+
+int entry_add(
+        Entry entries[],
+        int max_entries,
+        int* entry_count,
+        const char* title,
+        const char* username,
+        const char* password
+);
+
+int entry_update(
+        Entry entries[],
+        int entry_count,
+        int index,
+        const char* title,
+        const char* username,
+        const char* password
+);
+
+int entry_remove(
+        Entry entries[],
+        int* entry_count,
+        int index
+);
+
+void entry_print(const Entry* entry);
+
+void entry_print_list(
+        const Entry entries[],
+        int entry_count
+);
 
 #ifdef __cplusplus
 }

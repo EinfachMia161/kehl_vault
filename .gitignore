@@ -3,6 +3,7 @@ cmake-build-*/
 
 # CLion / JetBrains
 .idea/
+.aiassistant
 
 # Compiled binaries
 *.exe
@@ -15,7 +16,6 @@ cmake-build-*/
 # Object files
 *.o
 *.obj
-
 # CMake files
 CMakeFiles/
 CMakeCache.txt
