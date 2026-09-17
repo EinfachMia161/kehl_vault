@@ -3,28 +3,36 @@
 #include <iostream>
 
 int main() {
-    const char* test_password = "Abc12345!";
+    const unsigned char test_random_bytes[] = {
+        12, 55, 201, 7, 88, 143, 29, 250,
+        64, 111, 3, 190
+    };
 
-    const int minimum_length = 8;
+    const char* character_set =
+            "abcdefghijklmnopqrstuvwxyz"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "0123456789"
+            "!@#$%";
 
-    int password_score =
-            password_calculate_strength(test_password, minimum_length);
+    const int password_length = 12;
 
-    std::cout << "Passwortanalyse\n";
-    std::cout << "---------------\n";
+    char generated_password[13];
 
-    std::cout << "Punkte: "
-              << password_score
-              << " von 5\n";
+    int generation_successful =
+            password_generate_from_bytes(
+                    test_random_bytes,
+                    12,
+                    character_set,
+                    password_length,
+                    generated_password,
+                    13
+            );
 
-    std::cout << "Staerke: ";
-
-    if (password_score <= 2) {
-        std::cout << "schwach\n";
-    } else if (password_score <= 4) {
-        std::cout << "mittel\n";
+    if (generation_successful == 1) {
+        std::cout << "Passwort wurde erfolgreich erzeugt.\n";
+        std::cout << "Laenge: " << password_length << "\n";
     } else {
-        std::cout << "stark\n";
+        std::cout << "Passwort konnte nicht erzeugt werden.\n";
     }
 
     return 0;

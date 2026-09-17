@@ -91,3 +91,42 @@ int password_calculate_strength(
 
     return score;
 }
+
+int password_generate_from_bytes(
+        const unsigned char* random_bytes,
+        int random_bytes_count,
+        const char* character_set,
+        int password_length,
+        char* output,
+        int output_size
+) {
+    int character_set_length = (int)strlen(character_set);
+
+    if (random_bytes == NULL ||
+        character_set == NULL ||
+        output == NULL) {
+        return 0;
+    }
+
+    if (random_bytes_count <= 0 ||
+        character_set_length <= 0 ||
+        password_length <= 0) {
+        return 0;
+    }
+
+    if (output_size <= password_length) {
+        return 0;
+    }
+
+    for (int index = 0; index < password_length; index++) {
+        int character_index =
+                random_bytes[index % random_bytes_count]
+                % character_set_length;
+
+        output[index] = character_set[character_index];
+    }
+
+    output[password_length] = '\0';
+
+    return 1;
+}

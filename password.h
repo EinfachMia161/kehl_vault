@@ -18,6 +18,16 @@ int password_calculate_strength(
 
 );
 
+int password_generate_from_bytes(
+    const unsigned char* random_bytes,
+    int random_bytes_count,
+    const char* character_set,
+    int password_length,
+    char* output,
+    int output_size
+
+);
+
 #ifdef __cplusplus
 }
 #endif
