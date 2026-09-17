@@ -1,0 +1,25 @@
+# Build directories
+cmake-build-*/
+
+# CLion / JetBrains
+.idea/
+
+# Compiled binaries
+*.exe
+*.out
+*.app
+
+# Object files
+*.o
+*.obj
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Visual Studio / Windows
+.vs/
+*.suo
+*.user
