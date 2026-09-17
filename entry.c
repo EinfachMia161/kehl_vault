@@ -1,11 +1,15 @@
-#include "entry.h"
+/**
+ * @file entry.c
+ * @brief Implementation of Entry CRUD operations and dynamic EntryList memory management.
+ */
 
+#include "entry.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 void entry_print_module_status(void) {
-    printf("Das C-Entry-Modul funktioniert.\n");
+    printf("C Entry Module is operational.\n");
 }
 
 int entry_create(
@@ -21,6 +25,7 @@ int entry_create(
         return 0;
     }
 
+    /* Bounded string copy with explicit null-termination guarantee */
     strncpy(entry->title, title, ENTRY_TITLE_SIZE - 1);
     entry->title[ENTRY_TITLE_SIZE - 1] = '\0';
 
@@ -66,7 +71,6 @@ int entry_add(
     }
 
     (*entry_count)++;
-
     return 1;
 }
 
@@ -122,6 +126,7 @@ int entry_remove(
         return 0;
     }
 
+    /* Shift subsequent elements left to maintain compactness */
     for (int current_index = index;
          current_index < *entry_count - 1;
          current_index++) {
@@ -129,20 +134,18 @@ int entry_remove(
     }
 
     (*entry_count)--;
-
-    Entry empty_entry = {0};
-    entries[*entry_count] = empty_entry;
-
     return 1;
 }
 
 void entry_print(const Entry* entry) {
     if (entry == NULL) {
+        printf("Entry is NULL\n");
         return;
     }
 
-    printf("Titel: %s\n", entry->title);
-    printf("Benutzername: %s\n", entry->username);
+    printf("Title:    %s\n", entry->title);
+    printf("Username: %s\n", entry->username);
+    printf("Password: %s\n", entry->password);
 }
 
 void entry_print_list(
@@ -150,18 +153,17 @@ void entry_print_list(
         int entry_count
 ) {
     if (entries == NULL || entry_count <= 0) {
-        printf("Keine Entries vorhanden.\n");
+        printf("The list is empty.\n");
         return;
     }
 
     for (int index = 0; index < entry_count; index++) {
-        printf("Entry %d\n", index + 1);
-        printf("-------\n");
-
+        printf("----------------------------------------\n");
+        printf("Entry [%d]\n", index);
         entry_print(&entries[index]);
-
-        printf("\n");
     }
+
+    printf("----------------------------------------\n");
 }
 
 int entry_list_init(
@@ -172,8 +174,7 @@ int entry_list_init(
         return 0;
     }
 
-    list->entries =
-            malloc(sizeof(Entry) * initial_capacity);
+    list->entries = (Entry*)malloc(sizeof(Entry) * (size_t)initial_capacity);
 
     if (list->entries == NULL) {
         list->count = 0;
@@ -183,6 +184,31 @@ int entry_list_init(
 
     list->count = 0;
     list->capacity = initial_capacity;
+
+    return 1;
+}
+
+static int entry_list_grow(EntryList* list) {
+    if (list == NULL) {
+        return 0;
+    }
+
+    int new_capacity = list->capacity * 2;
+    if (new_capacity <= 0) {
+        new_capacity = 4;
+    }
+
+    Entry* new_entries = (Entry*)realloc(
+            list->entries,
+            sizeof(Entry) * (size_t)new_capacity
+    );
+
+    if (new_entries == NULL) {
+        return 0;
+    }
+
+    list->entries = new_entries;
+    list->capacity = new_capacity;
 
     return 1;
 }
@@ -200,31 +226,19 @@ int entry_list_add(
         return 0;
     }
 
-    if (list->entries == NULL ||
-        list->capacity <= 0) {
-        return 0;
-    }
-
     if (list->count >= list->capacity) {
-        int new_capacity = list->capacity * 2;
+        int grow_successful = entry_list_grow(list);
 
-        Entry* resized_entries =
-                realloc(
-                        list->entries,
-                        sizeof(Entry) * new_capacity
-                );
-
-        if (resized_entries == NULL) {
+        if (grow_successful == 0) {
             return 0;
         }
-
-        list->entries = resized_entries;
-        list->capacity = new_capacity;
     }
+
+    int new_index = list->count;
 
     int creation_successful =
             entry_create(
-                    &list->entries[list->count],
+                    &list->entries[new_index],
                     title,
                     username,
                     password
@@ -235,7 +249,6 @@ int entry_list_add(
     }
 
     list->count++;
-
     return 1;
 }
 
@@ -243,8 +256,7 @@ Entry* entry_list_get(
         EntryList* list,
         int index
 ) {
-    if (list == NULL ||
-        list->entries == NULL) {
+    if (list == NULL) {
         return NULL;
     }
 
@@ -259,8 +271,7 @@ int entry_list_remove(
         EntryList* list,
         int index
 ) {
-    if (list == NULL ||
-        list->entries == NULL) {
+    if (list == NULL) {
         return 0;
     }
 
@@ -271,42 +282,22 @@ int entry_list_remove(
     for (int current_index = index;
          current_index < list->count - 1;
          current_index++) {
-        list->entries[current_index] =
-                list->entries[current_index + 1];
+        list->entries[current_index] = list->entries[current_index + 1];
     }
 
     list->count--;
-
-    Entry empty_entry = {0};
-    list->entries[list->count] = empty_entry;
-
     return 1;
 }
 
 void entry_list_print(
         const EntryList* list
 ) {
-    if (list == NULL ||
-        list->entries == NULL ||
-        list->count <= 0) {
-        printf("Keine Entries vorhanden.\n");
+    if (list == NULL || list->count <= 0) {
+        printf("The dynamic list is empty.\n");
         return;
     }
 
-    printf(
-            "Entries: %d/%d\n\n",
-            list->count,
-            list->capacity
-    );
-
-    for (int index = 0; index < list->count; index++) {
-        printf("Entry %d\n", index + 1);
-        printf("-------\n");
-
-        entry_print(&list->entries[index]);
-
-        printf("\n");
-    }
+    entry_print_list(list->entries, list->count);
 }
 
 void entry_list_destroy(
@@ -316,9 +307,11 @@ void entry_list_destroy(
         return;
     }
 
-    free(list->entries);
+    if (list->entries != NULL) {
+        free(list->entries);
+        list->entries = NULL;
+    }
 
-    list->entries = NULL;
     list->count = 0;
     list->capacity = 0;
 }

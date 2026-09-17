@@ -1,3 +1,8 @@
+/**
+ * @file clipboard.c
+ * @brief Implementation of cross-platform clipboard interactions.
+ */
+
 #include "clipboard.h"
 #include <string.h>
 #include <stdlib.h>
@@ -6,34 +11,34 @@
 #include <windows.h>
 
 int clipboard_copy_text(const char* text) {
-    if (text == NULL) {
-        return 0;
-    }
+    if (text == NULL) return 0;
 
     size_t len = strlen(text);
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len + 1);
-    if (hMem == NULL) {
-        return 0;
-    }
-
-    char* pMem = (char*)GlobalLock(hMem);
-    if (pMem == NULL) {
-        GlobalFree(hMem);
-        return 0;
-    }
-
-    memcpy(pMem, text, len + 1);
-    GlobalUnlock(hMem);
-
     if (!OpenClipboard(NULL)) {
-        GlobalFree(hMem);
         return 0;
     }
 
     EmptyClipboard();
-    if (SetClipboardData(CF_TEXT, hMem) == NULL) {
+
+    HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, len + 1);
+    if (hGlob == NULL) {
         CloseClipboard();
-        GlobalFree(hMem);
+        return 0;
+    }
+
+    char* pBuf = (char*)GlobalLock(hGlob);
+    if (pBuf == NULL) {
+        GlobalFree(hGlob);
+        CloseClipboard();
+        return 0;
+    }
+
+    memcpy(pBuf, text, len + 1);
+    GlobalUnlock(hGlob);
+
+    if (SetClipboardData(CF_TEXT, hGlob) == NULL) {
+        GlobalFree(hGlob);
+        CloseClipboard();
         return 0;
     }
 
@@ -45,12 +50,10 @@ int clipboard_copy_text(const char* text) {
 #include <stdio.h>
 
 int clipboard_copy_text(const char* text) {
-    if (text == NULL) {
-        return 0;
-    }
+    if (text == NULL) return 0;
 
-    /* Try wl-copy (Wayland), xclip, xsel, pbcopy (macOS) */
-    FILE* pipe = popen("wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || xsel -b 2>/dev/null || pbcopy 2>/dev/null", "w");
+    /* Try wl-copy (Wayland), xclip (X11), xsel, or pbcopy (macOS) */
+    FILE* pipe = popen("wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null || xsel --clipboard --input 2>/dev/null || pbcopy 2>/dev/null", "w");
     if (pipe == NULL) {
         return 0;
     }

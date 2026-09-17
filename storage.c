@@ -1,5 +1,11 @@
+/**
+ * @file storage.c
+ * @brief Implementation of encrypted binary persistence and atomic file replacement.
+ */
+
 #include "storage.h"
 #include "password.h"
+#include "secure_mem.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -79,6 +85,7 @@ int vault_save_to_file(const EntryList* list, const char* filepath, const char* 
                 VAULT_PBKDF2_ITERATIONS,
                 derived_keys,
                 sizeof(derived_keys))) {
+            secure_memzero(derived_keys, sizeof(derived_keys));
             fclose(file);
             remove(tmp_filepath);
             return VAULT_ERR_ALLOCATION;
@@ -90,6 +97,7 @@ int vault_save_to_file(const EntryList* list, const char* filepath, const char* 
         if (list->count > 0) {
             payload_to_write = (uint8_t*)malloc(payload_size);
             if (payload_to_write == NULL) {
+                secure_memzero(derived_keys, sizeof(derived_keys));
                 fclose(file);
                 remove(tmp_filepath);
                 return VAULT_ERR_ALLOCATION;
@@ -109,6 +117,8 @@ int vault_save_to_file(const EntryList* list, const char* filepath, const char* 
             /* Empty list tag calculation */
             crypto_hmac_sha256(auth_key, 32, (const uint8_t*)"", 0, header.auth_tag);
         }
+
+        secure_memzero(derived_keys, sizeof(derived_keys));
     } else {
         header.version = VAULT_VERSION_LEGACY;
     }
@@ -132,6 +142,7 @@ int vault_save_to_file(const EntryList* list, const char* filepath, const char* 
     }
 
     if (payload_to_write) {
+        secure_memzero(payload_to_write, payload_size);
         free(payload_to_write);
     }
 
@@ -181,7 +192,7 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
     }
 
     int initial_cap = (int)header.entry_count;
-    if (initial_cap < 4) {
+    if (initial_cap <= 0) {
         initial_cap = 4;
     }
 
@@ -209,6 +220,7 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
                 VAULT_PBKDF2_ITERATIONS,
                 derived_keys,
                 sizeof(derived_keys))) {
+            secure_memzero(derived_keys, sizeof(derived_keys));
             entry_list_destroy(&new_list);
             fclose(file);
             return VAULT_ERR_ALLOCATION;
@@ -220,6 +232,7 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
         if (header.entry_count > 0) {
             uint8_t* encrypted_payload = (uint8_t*)malloc(payload_size);
             if (encrypted_payload == NULL) {
+                secure_memzero(derived_keys, sizeof(derived_keys));
                 entry_list_destroy(&new_list);
                 fclose(file);
                 return VAULT_ERR_ALLOCATION;
@@ -227,7 +240,9 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
 
             size_t bytes_read = fread(encrypted_payload, 1, payload_size, file);
             if (bytes_read != payload_size) {
+                secure_memzero(encrypted_payload, payload_size);
                 free(encrypted_payload);
+                secure_memzero(derived_keys, sizeof(derived_keys));
                 entry_list_destroy(&new_list);
                 fclose(file);
                 return VAULT_ERR_CORRUPT_DATA;
@@ -237,7 +252,9 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
             crypto_hmac_sha256(auth_key, 32, encrypted_payload, payload_size, computed_tag);
 
             if (!crypto_constant_time_equals(computed_tag, header.auth_tag, CRYPTO_SHA256_HASH_SIZE)) {
+                secure_memzero(encrypted_payload, payload_size);
                 free(encrypted_payload);
+                secure_memzero(derived_keys, sizeof(derived_keys));
                 entry_list_destroy(&new_list);
                 fclose(file);
                 return VAULT_ERR_INVALID_PASSWORD;
@@ -252,17 +269,21 @@ int vault_load_from_file(EntryList* list, const char* filepath, const char* mast
                 payload_size
             );
 
+            secure_memzero(encrypted_payload, payload_size);
             free(encrypted_payload);
         } else {
             uint8_t computed_tag[CRYPTO_SHA256_HASH_SIZE];
             crypto_hmac_sha256(auth_key, 32, (const uint8_t*)"", 0, computed_tag);
 
             if (!crypto_constant_time_equals(computed_tag, header.auth_tag, CRYPTO_SHA256_HASH_SIZE)) {
+                secure_memzero(derived_keys, sizeof(derived_keys));
                 entry_list_destroy(&new_list);
                 fclose(file);
                 return VAULT_ERR_INVALID_PASSWORD;
             }
         }
+
+        secure_memzero(derived_keys, sizeof(derived_keys));
     } else {
         /* Legacy version 1 unencrypted */
         if (header.entry_count > 0) {

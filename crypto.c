@@ -1,3 +1,8 @@
+/**
+ * @file crypto.c
+ * @brief Implementation of RFC-standard cryptographic hash and cipher primitives.
+ */
+
 #include "crypto.h"
 #include <string.h>
 #include <stdlib.h>
@@ -197,7 +202,7 @@ int crypto_pbkdf2_sha256(
     uint8_t u[CRYPTO_SHA256_HASH_SIZE];
     uint8_t t[CRYPTO_SHA256_HASH_SIZE];
 
-    /* Temp buffer for salt + 4-byte block index */
+    /* Allocate buffer for salt + 4-byte big-endian block index */
     uint8_t* s_block = (uint8_t*)malloc(salt_len + 4);
     if (!s_block) return 0;
     memcpy(s_block, salt, salt_len);
@@ -235,9 +240,9 @@ int crypto_pbkdf2_sha256(
 #define CHACHA_ROTL32(v, n) (((v) << (n)) | ((v) >> (32 - (n))))
 #define CHACHA_QUARTERROUND(a, b, c, d) \
     a += b; d ^= a; d = CHACHA_ROTL32(d, 16); \
-    c += d; b ^= c; b = CHACHA_ROTL32(b, 12); \
+    c += d; b ^= c; b = CHACHA_ROTL32(d, 12); \
     a += b; d ^= a; d = CHACHA_ROTL32(d, 8);  \
-    c += d; b ^= c; b = CHACHA_ROTL32(b, 7);
+    c += d; b ^= c; b = CHACHA_ROTL32(d, 7);
 
 static uint32_t load_le32(const uint8_t* p) {
     return ((uint32_t)p[0]) |
@@ -293,7 +298,7 @@ void crypto_chacha20_xor(
     state[2] = 0x79622d32;
     state[3] = 0x6b206574;
 
-    /* Key */
+    /* Key (256-bit) */
     for (int i = 0; i < 8; ++i) {
         state[4 + i] = load_le32(key + i * 4);
     }

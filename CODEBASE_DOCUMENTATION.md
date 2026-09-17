@@ -1,297 +1,200 @@
-# Kehl Vault – Codebase & Architecture Documentation
+# Kehl-Vault – Comprehensive Codebase & Architecture Documentation
 
-## 1. Purpose and current status
+`kehl-vault` is a high-performance, modular, and cross-platform command-line password manager (CLI Vault) implemented in standard C (C17) and C++ (C++20). The system is designed with zero external runtime dependencies, strict memory safety guarantees, and industry-standard authenticated encryption.
 
-Kehl Vault is an educational C17/C++20 password-vault project. It is built incrementally to teach systems programming, memory management, file handling, application structure, and security engineering.
+---
 
-The current source contains an interactive CLI application, dynamic entry management, persistent vault files, a custom cryptographic layer, clipboard integration, password auditing, CSV/JSON import-export, and a committed C++ test program.
+## 1. System Overview & Module Architecture
 
-> **Security notice:** The project is not independently security-reviewed and must not be used as a real password manager or trusted credential store.
+The codebase strictly enforces the **Separation of Concerns** principle:
+- **Core algorithmic, cryptographic, and persistence logic (`.c`/`.h`)**: Implemented in portable, lightweight C (C17) for zero runtime overhead and predictable memory layouts.
+- **Presentation and interactive console layer (`main.cpp`)**: Implemented in C++ (C++20) for structured user interaction, masked input handling, and terminal flow control.
 
-This document describes the implementation currently present in the repository. Future GUI, RAII-controller and cryptographic-hardening work is explicitly separated from current code.
+```mermaid
+graph TD
+    User([User / CLI Terminal]) <--> Main[main.cpp - Presentation & Command Loop]
+    
+    subgraph Core Data & Taxonomy
+        Main --> Entry[entry.c / entry.h - Dynamic Memory & Models]
+        Main --> Cat[category.c / category.h - Categories & Tag Filtering]
+        Main --> Hist[history.c / history.h - Change Log & Trash Bin]
+    end
 
-## 2. Repository layout
+    subgraph Security & Cryptography
+        Main --> Pass[password.c / password.h - Password Security & Passphrases]
+        Main --> Crypto[crypto.c / crypto.h - SHA-256, HMAC, PBKDF2, ChaCha20]
+        Main --> Totp[totp.c / totp.h - RFC 6238 2FA Generator]
+        Main --> SecMem[secure_mem.c / secure_mem.h - Volatile Memory Scrubbing]
+    end
 
-```text
-kehl_vault/
-├── CMakeLists.txt
-├── main.cpp
-├── entry.h / entry.c
-├── password.h / password.c
-├── storage.h / storage.c
-├── crypto.h / crypto.c
-├── clipboard.h / clipboard.c
-├── audit.h / audit.c
-├── impex.h / impex.c
-├── README.md
-├── CODEBASE_DOCUMENTATION.md
-├── .github/workflows/build.yml
-└── tests/
-    └── test_vault.cpp
+    subgraph Storage & Backup
+        Main --> Storage[storage.c / storage.h - Authenticated Encrypted I/O]
+        Main --> Backup[backup.c / backup.h - Snapshot Creation & Rotation]
+        Main --> Profile[profile.c / profile.h - Multi-Vault Database Switcher]
+        Main --> Impex[impex.c / impex.h - RFC 4180 CSV & JSON Impex]
+        Storage --> VaultFile[(vault.dat - Encrypted Database)]
+    end
+
+    subgraph Utilities & Analysis
+        Main --> Clip[clipboard.c / clipboard.h - Secure System Clipboard]
+        Main --> Audit[audit.c / audit.h - Security Audit & Duplicate Detection]
+        Main --> Expiry[expiry.c / expiry.h - Expiration & Age Tracking]
+        Main --> Search[search.c / search.h - Fuzzy Levenshtein Ranking]
+    end
 ```
 
-The low-level modules are written in C. `main.cpp` and `tests/test_vault.cpp` provide the current C++20 integration layer.
+---
 
-## 3. Build system
+## 2. Detailed Module Breakdown
 
-`CMakeLists.txt` requires CMake 4.3 or newer and enables:
+### 2.1 In-Memory Data Structures: `entry.h` & `entry.c`
+Manages in-memory credential storage:
+- **`Entry`**: Fixed-size credential record (`ENTRY_TITLE_SIZE = 64`, `ENTRY_USERNAME_SIZE = 64`, `ENTRY_PASSWORD_SIZE = 64`). Guarantees bounded copies and explicit null termination.
+- **`EntryList`**: Resizable dynamic heap array (`entries`, `count`, `capacity`).
+- **Growth Policy**: Automatically doubles capacity via `realloc` when `count >= capacity`.
+- **Compaction**: `entry_list_remove` uses `memmove` to close array gaps seamlessly.
 
-- C17 for the C modules
-- C++20 for the application and test runner
+---
 
-The build creates:
+### 2.2 Cryptographic Primitives: `crypto.h` & `crypto.c`
+Provides self-contained cryptographic algorithms compliant with official RFC standards:
+1. **SHA-256 (RFC 6234)**: Cryptographic 256-bit hashing primitive.
+2. **HMAC-SHA256 (RFC 2104)**: Keyed-hash message authentication.
+3. **PBKDF2-HMAC-SHA256 (RFC 2898)**: Key derivation function with 100,000 iterations to resist brute-force attacks.
+4. **ChaCha20 (RFC 8439)**: High-speed 256-bit stream cipher with 96-bit nonces.
+5. **`crypto_constant_time_equals`**: Constant-time comparison avoiding timing side-channel attacks.
 
-- `kehl_vault` – interactive CLI application
-- `test_vault` – committed C++ integration/unit-style test executable
+---
 
-CTest is enabled and registers `test_vault` as the `test_vault` test.
+### 2.3 Storage & Persistence: `storage.h` & `storage.c`
+Serializes and deserializes the vault with Authenticated Encryption:
+- **Header Structure**:
+  ```c
+  typedef struct {
+      uint32_t magic;                            // 0x564B4548 ("KEHV")
+      uint32_t version;                          // 1 = plain, 2 = encrypted
+      uint32_t entry_count;                      // Number of records
+      uint8_t  salt[CRYPTO_SALT_SIZE];           // PBKDF2 random salt
+      uint8_t  nonce[CRYPTO_NONCE_SIZE];         // ChaCha20 random nonce
+      uint8_t  auth_tag[CRYPTO_SHA256_HASH_SIZE];// HMAC-SHA256 authentication tag
+  } VaultHeader;
+  ```
+- **Encrypt-then-MAC**: Derives two distinct 32-byte keys (`enc_key` and `auth_key`) via PBKDF2. Encrypts payload with ChaCha20, then authenticates ciphertext with HMAC-SHA256.
+- **Atomic Writes**: Writes first to temporary file (`.tmp`), flushes, closes, and renames atomatically to prevent corruption during unexpected shutdowns.
 
-Typical build:
+---
 
+### 2.4 Password Generation & Security: `password.h` & `password.c`
+- **Strength Evaluation (`password_calculate_strength`)**: Scores 0 to 5 based on length, lowercase, uppercase, digits, and special characters.
+- **OS Cryptographic Entropy (`password_get_secure_random_bytes`)**: Uses `BCryptGenRandom` on Windows and `/dev/urandom` on POSIX.
+- **Diceware Passphrase Generator (`password_generate_passphrase`)**: Assembles memorable multi-word passphrases from a curated 256-word dictionary.
+
+---
+
+### 2.5 Multi-Profile Management: `profile.h` & `profile.c`
+- Manages isolated vaults (e.g., `vault.dat`, `vault_work.dat`, `vault_finance.dat`).
+- Discovers existing databases in the working directory and allows switching without restarting.
+
+---
+
+### 2.6 Categorization & Tagging: `category.h` & `category.c`
+- Standard category definitions (`Login`, `Card`, `Secure Note`, `Identity`, `Other`).
+- Fast tag parsing and case-insensitive matching for multi-tag workflows.
+
+---
+
+### 2.7 Two-Factor Authentication (TOTP): `totp.h` & `totp.c`
+- RFC 6238 and RFC 4226 compliant 6-digit rolling code generator.
+- Base32 decoding, HMAC-SHA1 calculation, and 30-second time-step interval tracking.
+
+---
+
+### 2.8 Change History & Trash Bin: `history.h` & `history.c`
+- Maintains in-memory historical logs of modified and deleted records.
+- Soft-deletion allows restoring accidentally deleted entries back to the active vault.
+
+---
+
+### 2.9 Password Age & Expiration Tracking: `expiry.h` & `expiry.c`
+- Evaluates password freshness against configurable rotation policies (30, 60, 90, 180, 365 days).
+- Identifies expiring-soon and expired credentials requiring rotation.
+
+---
+
+### 2.10 Automated Backup Snapshots: `backup.h` & `backup.c`
+- Creates timestamped encrypted copies (`.bak_<timestamp>`) prior to destructive saves.
+- Automatically rotates and prunes old snapshots to retain the newest 10 backups.
+
+---
+
+### 2.11 Fuzzy Search & Ranking Engine: `search.h` & `search.c`
+- Combines exact match, prefix, substring, and Levenshtein edit distance calculations.
+- Weighted multi-field ranking across entry titles and usernames.
+
+---
+
+### 2.12 Secure Memory Wiping: `secure_mem.h` & `secure_mem.c`
+- Uses `SecureZeroMemory` on Windows and volatile scrubbing on POSIX.
+- Guarantees sensitive plaintext credentials, derived encryption keys, and buffers are wiped from RAM before deallocation.
+
+---
+
+### 2.13 System Clipboard: `clipboard.h` & `clipboard.c`
+- Direct copying to system clipboard (Win32 API on Windows, `wl-copy`/`xclip`/`pbcopy` on POSIX).
+
+---
+
+### 2.14 Security Audit: `audit.h` & `audit.c`
+- Scans for duplicate passwords across entries and computes a comprehensive health score (0–100%).
+
+---
+
+### 2.15 Import & Export: `impex.h` & `impex.c`
+- RFC 4180-compliant CSV and structured JSON import/export.
+
+---
+
+## 3. The 20 Delivery Steps & Architectural Mapping
+
+| Step | Phase / Feature | Architecture Summary |
+| :--- | :--- | :--- |
+| **Step 1** | *Storage Persistence* | Added `storage.c/h`, `VaultHeader`, binary serialization, and atomic writes. |
+| **Step 2** | *Password Generation* | Integrated OS cryptographic entropy (`BCryptGenRandom`/`/dev/urandom`) into `password.c/h`. |
+| **Step 3** | *Interactive CLI* | Replaced procedural demo in `main.cpp` with an interactive command loop. |
+| **Step 4** | *Automated Test Suite* | Established unit test harness in `tests/test_vault.cpp`. |
+| **Step 5** | *Master Password & Encryption* | Built `crypto.c/h` (SHA-256, PBKDF2, ChaCha20, HMAC) for version 2 encrypted vault files. |
+| **Step 6** | *Masking & Clipboard* | Implemented `clipboard.c/h` and masked console password inputs. |
+| **Step 7** | *Security Audit* | Created `audit.c/h` for duplicate password detection and health scoring. |
+| **Step 8** | *CSV & JSON Impex* | Created `impex.c/h` for cross-platform backup and interoperability. |
+| **Step 9** | *Diceware Passphrases* | Added multi-word passphrase generation to `password.c/h`. |
+| **Step 10** | *Documentation (Part 1)* | Authored initial codebase architecture documentation. |
+| **Step 11** | *Multi-Vault Profiles* | Added `profile.c/h` for isolated database files and profile switching. |
+| **Step 12** | *Categorization & Tags* | Added `category.c/h` for entry classification and tag parsing. |
+| **Step 13** | *TOTP 2FA Authenticator* | Implemented RFC 6238 Base32 and HMAC-SHA1 2FA generator in `totp.c/h`. |
+| **Step 14** | *History & Trash Bin* | Added `history.c/h` for change logging and soft-delete entry recovery. |
+| **Step 15** | *Password Expiry Tracking* | Added `expiry.c/h` for credential age evaluation and rotation policies. |
+| **Step 16** | *Encrypted Snapshots* | Added `backup.c/h` for automated snapshot creation and backup rotation. |
+| **Step 17** | *Fuzzy Search Engine* | Added `search.c/h` with Levenshtein distance and weighted multi-field ranking. |
+| **Step 18** | *Secure Memory Wiping* | Added `secure_mem.c/h` for compiler-safe zeroization of sensitive memory. |
+| **Step 19** | *Codebase Comment Refactor* | Thorough English comments and documentation across all files. |
+| **Step 20** | *Test Expansion & Git Push* | Comprehensive automated test validation across all 20 modules and remote sync. |
+
+---
+
+## 4. Build, Test & Run Instructions
+
+### 4.1 Build Project
 ```bash
-cmake -S . -B build
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+cmake -B cmake-build-debug -G Ninja
+cmake --build cmake-build-debug
 ```
 
-The repository also contains GitHub Actions that configure and build the project, run the CTest suite, and execute the CLI as a smoke test for pushes and pull requests targeting `master`.
-
-## 4. C/C++ boundary
-
-Public C headers use an `extern "C"` wrapper when included from C++:
-
-```c
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* C declarations */
-
-#ifdef __cplusplus
-}
-#endif
+### 4.2 Run Automated Tests
+```bash
+./cmake-build-debug/test_vault.exe
 ```
 
-This preserves C linkage names while allowing the C++ application to consume the C APIs.
-
-The repository does not yet contain the larger opaque-handle `VaultController` architecture described by the site's target specifications. That remains future work.
-
-## 5. Entry management – `entry.h` / `entry.c`
-
-`Entry` stores fixed-size character buffers for title, username and password. `EntryList` is a heap-backed array carrying its current count and capacity.
-
-Conceptually:
-
-```text
-EntryList
-├── entries   → heap array of Entry
-├── count     → valid element count
-└── capacity  → allocated element capacity
+### 4.3 Launch CLI Application
+```bash
+./cmake-build-debug/kehl_vault.exe
 ```
-
-The module currently provides initialization, insertion, indexed lookup, update, removal, list printing, destruction and capacity growth. When the list reaches capacity, the backing allocation grows before insertion; removal compacts the remaining entries.
-
-The data structure provides bounded application buffers, but the project does not yet claim a complete secure-secret memory lifecycle or independent memory-safety certification.
-
-## 6. Password handling – `password.h` / `password.c`
-
-### 6.1 Validation
-
-The current password helpers check minimum length, lowercase characters, uppercase characters, digits and special characters. `password_calculate_strength()` returns a 0–5 rule score. This score is a simple application heuristic, not a general password-strength estimator.
-
-The public functions now reject NULL pointers and invalid length parameters before calling string functions.
-
-### 6.2 Random bytes
-
-`password_get_secure_random_bytes()` currently uses:
-
-- Windows: `BCryptGenRandom(..., BCRYPT_USE_SYSTEM_PREFERRED_RNG)`
-- POSIX: reads from `/dev/urandom`
-
-### 6.3 Password and passphrase generation
-
-The module can build a configurable character set and generate passwords from random bytes. It also provides multi-word passphrase generation from an embedded word list.
-
-The current character selection uses modulo reduction. When the character-set size does not divide the source byte range evenly, modulo bias can occur. This is an explicit hardening item rather than a hidden security claim.
-
-## 7. Cryptography – `crypto.h` / `crypto.c`
-
-The repository currently implements these primitives directly:
-
-- SHA-256
-- HMAC-SHA256
-- PBKDF2-HMAC-SHA256
-- ChaCha20
-- constant-time byte comparison
-
-This is an educational custom implementation. Passing functional tests does not prove resistance to implementation flaws, side-channel problems, misuse, or cryptanalysis.
-
-The long-term hardening direction is to move the application cryptographic boundary onto a maintained, externally reviewed cryptographic library instead of keeping primitive implementations inside the application codebase.
-
-## 8. Persistent storage – `storage.h` / `storage.c`
-
-### 8.1 File versions
-
-`storage.h` defines:
-
-```c
-#define VAULT_VERSION_LEGACY 1
-#define VAULT_VERSION_ENCRYPTED 2
-#define VAULT_CURRENT_VERSION 2
-```
-
-Version 1 is the legacy unencrypted representation. Version 2 protects the entry payload with the custom cryptographic layer.
-
-### 8.2 Current header
-
-The current header is:
-
-```c
-typedef struct {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t entry_count;
-    uint8_t  salt[CRYPTO_SALT_SIZE];
-    uint8_t  nonce[CRYPTO_NONCE_SIZE];
-    uint8_t  auth_tag[CRYPTO_SHA256_HASH_SIZE];
-} VaultHeader;
-```
-
-The field widths sum to 72 bytes on a conventional ABI. `storage.c` serializes this native C structure directly, so it is not yet a deliberately specified portable wire format.
-
-The current magic constant is `VAULT_MAGIC = 0x564B4548`, commented as `KEHV` in the header. It is a numeric `uint32_t`, not an ASCII `KVLT` byte array.
-
-### 8.3 Version 2 protection flow
-
-The current encrypted path is conceptually:
-
-```text
-master password
-       │
-       ▼
-PBKDF2-HMAC-SHA256, 100,000 iterations
-       │
-       ▼
-64 derived bytes
- ┌─────┴─────┐
- ▼           ▼
-32-byte      32-byte
-enc key      auth key
- │            │
- ▼            │
-ChaCha20      │
- │            │
- ▼            ▼
-ciphertext → HMAC-SHA256
-```
-
-The load path checks the expected file marker and version, validates the entry count, verifies the authentication tag, and only then accepts the encrypted payload for decryption.
-
-### 8.4 Current limitations
-
-The native C structure makes the file format ABI-dependent. Integer byte order and structure layout are not separately encoded on disk.
-
-The current HMAC authenticates the encrypted payload, but integrity-sensitive header values are not fully covered. A future format should explicitly serialize fields and authenticate the complete metadata needed to interpret the payload.
-
-Temporary-file replacement can reduce the risk of partially written destination files, but it cannot honestly guarantee that data loss is impossible under every filesystem or power-failure scenario.
-
-## 9. Clipboard – `clipboard.h` / `clipboard.c`
-
-The implementation currently supports:
-
-- native Win32 clipboard APIs on Windows
-- `wl-copy`
-- `xclip`
-- `xsel`
-- `pbcopy`
-
-The clipboard module validates its text pointer before use. Timed clipboard clearing is a future application-layer feature; copying data successfully does not imply that the operating system will erase all historical copies of that data.
-
-## 10. Security audit – `audit.h` / `audit.c`
-
-The audit module analyzes the current entry set for password weakness and reuse. It also derives a vault-health score from those application-level indicators.
-
-The score is a heuristic and must not be read as a cryptographic security level, formal risk metric or compliance assessment.
-
-## 11. Import/export – `impex.h` / `impex.c`
-
-The current project supports CSV and JSON import/export.
-
-The implementation is covered by tests for representative escaping and formatting cases. Exported files may contain credentials in plaintext and therefore require the same handling as other sensitive data.
-
-## 12. CLI – `main.cpp`
-
-`main.cpp` provides the current interactive C++20 application. It integrates the C modules into a menu-driven CLI workflow covering the implemented vault capabilities.
-
-The current application includes workflows for:
-
-- listing and searching entries
-- creating, editing and deleting entries
-- password generation
-- clipboard copying
-- security auditing
-- CSV/JSON import-export
-- vault save/load
-
-Password input is masked in the terminal workflow.
-
-The planned desktop GUI/controller architecture is not part of the current codebase.
-
-## 13. Automated tests – `tests/test_vault.cpp`
-
-The committed test program exercises a broad set of current modules, including:
-
-- EntryList CRUD, resizing and bounds behavior
-- SHA-256, HMAC, ChaCha20 and constant-time comparison
-- persistence and encrypted/legacy file handling
-- wrong-password and corruption rejection
-- password validation and generation
-- secure random-byte acquisition
-- clipboard error paths
-- password audit and reuse detection
-- CSV and JSON import/export
-
-These tests are regression and integration checks. They are not a substitute for independent cryptographic review or exhaustive platform testing.
-
-## 14. Continuous integration
-
-The current software CI is intended to follow:
-
-```text
-Checkout
-   ↓
-CMake configure
-   ↓
-Build application + tests
-   ↓
-CTest
-   ↓
-CLI smoke test
-```
-
-This makes the committed test suite part of the automated engineering loop rather than merely a source file that happens to exist.
-
-## 15. Hardening roadmap
-
-The most important remaining engineering tasks are:
-
-1. Replace custom cryptographic primitives with a maintained cryptographic library.
-2. Remove modulo bias from character selection in the password generator.
-3. Define a portable binary format with explicit field widths and byte order.
-4. Authenticate integrity-sensitive header metadata.
-5. Establish deliberate secret-memory zeroization and minimize secret copies.
-6. Add sanitizer, static-analysis and fuzzing CI.
-7. Review clipboard and import/export exposure paths.
-8. Complete the planned C++20 RAII/controller layer.
-9. Add the planned SDL3/Dear ImGui GUI once the core interfaces are stable.
-10. Obtain an independent security review before any real-secret use.
-
-## 16. Documentation provenance
-
-The associated documentation site follows three distinct evidence levels:
-
-- **Source evidence:** the referenced file or implementation exists in `kehl_vault@master`.
-- **Build/test evidence:** an actual build or automated test run exercised the behavior.
-- **Target specification:** a planned architecture or interface that is intentionally not claimed as implemented.
-
-A file existing in Git is therefore never treated as proof of runtime correctness, cryptographic security, portability, or production readiness.

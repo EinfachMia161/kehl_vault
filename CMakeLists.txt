@@ -25,6 +25,22 @@ add_executable(kehl_vault
         audit.h
         impex.c
         impex.h
+        profile.c
+        profile.h
+        category.c
+        category.h
+        totp.c
+        totp.h
+        history.c
+        history.h
+        expiry.c
+        expiry.h
+        backup.c
+        backup.h
+        search.c
+        search.h
+        secure_mem.c
+        secure_mem.h
 )
 
 add_executable(test_vault
@@ -43,6 +59,22 @@ add_executable(test_vault
         audit.h
         impex.c
         impex.h
+        profile.c
+        profile.h
+        category.c
+        category.h
+        totp.c
+        totp.h
+        history.c
+        history.h
+        expiry.c
+        expiry.h
+        backup.c
+        backup.h
+        search.c
+        search.h
+        secure_mem.c
+        secure_mem.h
 )
 
 enable_testing()

@@ -1,7 +1,12 @@
-#include "password.h"
+/**
+ * @file password.c
+ * @brief Implementation of password scoring, cryptographically secure RNG, and passphrase generation.
+ */
 
+#include "password.h"
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -19,83 +24,53 @@
 #define CHARSET_SPECIAL "!@#$%^&*()-_=+[]{}|;:,.<>?"
 
 int password_is_long_enough(const char* password, int minimum_length) {
-    if (password == NULL || minimum_length < 0) {
-        return 0;
-    }
-
+    if (!password) return 0;
     int password_length = (int)strlen(password);
-
-    if (password_length >= minimum_length) {
-        return 1;
-    }
-
-    return 0;
+    return (password_length >= minimum_length) ? 1 : 0;
 }
 
 int password_contains_lower_case(const char* password) {
-    if (password == NULL) {
-        return 0;
-    }
-
+    if (!password) return 0;
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= 'a' && password[index] <= 'z') {
             return 1;
         }
     }
-
     return 0;
 }
 
 int password_contains_upper_case(const char* password) {
-    if (password == NULL) {
-        return 0;
-    }
-
+    if (!password) return 0;
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= 'A' && password[index] <= 'Z') {
             return 1;
         }
     }
-
     return 0;
 }
 
 int password_contains_digit(const char* password) {
-    if (password == NULL) {
-        return 0;
-    }
-
+    if (!password) return 0;
     for (int index = 0; password[index] != '\0'; index++) {
         if (password[index] >= '0' && password[index] <= '9') {
             return 1;
         }
     }
-
     return 0;
 }
 
 int password_contains_special_character(const char* password) {
-    if (password == NULL) {
-        return 0;
-    }
-
+    if (!password) return 0;
     for (int index = 0; password[index] != '\0'; index++) {
         char character = password[index];
+        int is_lower = (character >= 'a' && character <= 'z');
+        int is_upper = (character >= 'A' && character <= 'Z');
+        int is_digit = (character >= '0' && character <= '9');
 
-        int is_lower_case =
-                character >= 'a' && character <= 'z';
-
-        int is_upper_case =
-                character >= 'A' && character <= 'Z';
-
-        int is_digit =
-                character >= '0' && character <= '9';
-
-        if (!is_lower_case && !is_upper_case && !is_digit) {
+        if (!is_lower && !is_upper && !is_digit) {
             return 1;
         }
     }
-
     return 0;
 }
 
@@ -103,28 +78,21 @@ int password_calculate_strength(
         const char* password,
         int minimum_length
 ) {
-    if (password == NULL || minimum_length < 0) {
-        return 0;
-    }
-
+    if (!password) return 0;
     int score = 0;
 
     if (password_is_long_enough(password, minimum_length) == 1) {
         score++;
     }
-
     if (password_contains_lower_case(password) == 1) {
         score++;
     }
-
     if (password_contains_upper_case(password) == 1) {
         score++;
     }
-
     if (password_contains_digit(password) == 1) {
         score++;
     }
-
     if (password_contains_special_character(password) == 1) {
         score++;
     }
@@ -147,7 +115,6 @@ int password_generate_from_bytes(
     }
 
     int character_set_length = (int)strlen(character_set);
-
     if (random_bytes_count <= 0 ||
         character_set_length <= 0 ||
         password_length <= 0) {
@@ -167,17 +134,16 @@ int password_generate_from_bytes(
     }
 
     output[password_length] = '\0';
-
     return 1;
 }
 
 const char* password_strength_to_string(int score) {
     if (score <= 2) {
-        return "Schwach";
+        return "Weak";
     } else if (score <= 4) {
-        return "Mittel";
+        return "Medium";
     } else {
-        return "Stark";
+        return "Strong";
     }
 }
 
@@ -272,24 +238,28 @@ static const char* WORDLIST[] = {
     "builder", "cabin", "cable", "camera", "campus", "candle", "canvas", "canyon",
     "capital", "captain", "capture", "carbon", "carrier", "castle", "casual", "catalog",
     "catch", "category", "cattle", "cause", "caution", "ceiling", "cell", "center",
-    "century", "ceremony", "chain", "chair", "chamber", "champion", "chance", "change",
-    "channel", "chapter", "charge", "charity", "chart", "chase", "cheese", "cherry",
-    "chest", "chicken", "chief", "child", "choice", "choose", "chronic", "chunk",
-    "circle", "circuit", "citizen", "civic", "civil", "claim", "classic", "climate",
-    "clinic", "clock", "closet", "cloud", "clover", "cluster", "coach", "coastal",
-    "coconut", "coffee", "cohort", "colleague", "college", "colony", "column", "combine",
-    "comfort", "command", "comment", "common", "company", "compare", "complex", "compose",
-    "concept", "concern", "concert", "conduct", "confirm", "connect", "consent", "control",
-    "cookie", "copper", "coral", "corner", "correct", "cotton", "couch", "counter",
-    "country", "courage", "cousin", "cradle", "craft", "crater", "credit", "creek",
-    "cricket", "crisis", "crisp", "critic", "cross", "crowd", "crystal", "cube",
-    "culture", "cupboard", "curtain", "cushion", "custom", "cyber", "cycle", "canyon",
-    "daily", "damage", "dance", "danger", "daring", "darwin", "database", "daughter",
-    "dawn", "daylight", "dealer", "debate", "debris", "decade", "decimal", "declare",
-    "decor", "decree", "defense", "degree", "delay", "deliver", "demand", "demise",
-    "denial", "density", "deposit", "deputy", "derive", "desert", "design", "desk",
-    "detail", "detect", "develop", "device", "devote", "dialog", "diamond", "diary",
-    "diesel", "dietary", "differ", "digital", "dilemma", "dinner", "diploma", "direct"
+    "chain", "chair", "chance", "change", "channel", "chapter", "charge", "chart",
+    "cheese", "choice", "church", "circle", "citizen", "city", "civil", "classic",
+    "clean", "clear", "client", "climate", "clock", "cloud", "coach", "coast",
+    "coffee", "column", "combat", "comfort", "command", "common", "company", "complex",
+    "concept", "concern", "concert", "conduct", "confirm", "connect", "contact", "contain",
+    "control", "cookie", "corner", "correct", "cotton", "couch", "counter", "country",
+    "couple", "courage", "course", "cousin", "cover", "craft", "crash", "credit",
+    "crisis", "critic", "cross", "crowd", "crystal", "culture", "cupboard", "current",
+    "custom", "damage", "dance", "danger", "darkness", "database", "daughter", "daylight",
+    "dealer", "debate", "decade", "decide", "decision", "declare", "defense", "degree",
+    "delivery", "demand", "dentist", "deposit", "deputy", "derive", "desert", "design",
+    "desire", "detail", "detect", "develop", "device", "dialog", "diamond", "digital",
+    "dinner", "direct", "discover", "display", "distance", "divide", "doctor", "domain",
+    "dolphin", "donate", "doorway", "double", "dragon", "drawer", "dream", "driver",
+    "dynamic", "eager", "eagle", "early", "earth", "easily", "echo", "economy",
+    "edition", "educate", "effect", "effort", "elastic", "elder", "element", "elite",
+    "embark", "embrace", "emerge", "emotion", "empire", "employ", "empower", "empty",
+    "enable", "enact", "endless", "endorse", "energy", "enforce", "engage", "engine",
+    "enhance", "enjoy", "enlist", "enough", "enrich", "enroll", "ensure", "enter",
+    "entire", "entry", "envelope", "episode", "equal", "equip", "erase", "erosion",
+    "escape", "essay", "essence", "estate", "eternal", "ethics", "evidence", "evil",
+    "evolve", "exact", "example", "excess", "exchange", "excite", "exclude", "excuse"
 };
 
 #define WORDLIST_SIZE ((int)(sizeof(WORDLIST) / sizeof(WORDLIST[0])))
@@ -310,38 +280,42 @@ int password_generate_passphrase(
     }
 
     output[0] = '\0';
+    unsigned char random_indices[64];
+
+    if (word_count > (int)sizeof(random_indices)) {
+        word_count = (int)sizeof(random_indices);
+    }
+
+    if (!password_get_secure_random_bytes(random_indices, word_count)) {
+        return 0;
+    }
+
     size_t current_len = 0;
 
     for (int i = 0; i < word_count; ++i) {
-        unsigned short random_index_val = 0;
-        if (!password_get_secure_random_bytes((unsigned char*)&random_index_val, sizeof(random_index_val))) {
-            return 0;
-        }
-
-        int word_idx = (int)(random_index_val % WORDLIST_SIZE);
+        int word_idx = random_indices[i] % WORDLIST_SIZE;
         const char* word = WORDLIST[word_idx];
         size_t word_len = strlen(word);
 
-        if (i > 0) {
-            size_t sep_len = strlen(separator);
-            if (current_len + sep_len + 1 >= (size_t)output_size) {
-                return 0;
-            }
-            strcat(output, separator);
-            current_len += sep_len;
-        }
-
-        if (current_len + word_len + 1 >= (size_t)output_size) {
+        if (current_len + word_len + strlen(separator) + 1 >= (size_t)output_size) {
             return 0;
         }
 
-        size_t start_pos = current_len;
-        strcat(output, word);
-        if (capitalize && word_len > 0) {
-            if (output[start_pos] >= 'a' && output[start_pos] <= 'z') {
-                output[start_pos] = (char)(output[start_pos] - 'a' + 'A');
-            }
+        if (i > 0) {
+            strcat(output, separator);
+            current_len += strlen(separator);
         }
+
+        if (capitalize && word_len > 0) {
+            char cap_word[64];
+            strncpy(cap_word, word, sizeof(cap_word) - 1);
+            cap_word[sizeof(cap_word) - 1] = '\0';
+            cap_word[0] = (char)toupper((unsigned char)cap_word[0]);
+            strcat(output, cap_word);
+        } else {
+            strcat(output, word);
+        }
+
         current_len += word_len;
     }
 

@@ -1,8 +1,14 @@
+/**
+ * @file audit.c
+ * @brief Implementation of vault security analysis and duplicate password detection.
+ */
+
 #include "audit.h"
 #include "password.h"
+#include <stdio.h>
 #include <string.h>
 
-int vault_audit_analyze(const EntryList* list, VaultAuditReport* report) {
+int audit_vault(const EntryList* list, VaultAuditReport* report) {
     if (list == NULL || report == NULL) {
         return 0;
     }
@@ -15,68 +21,90 @@ int vault_audit_analyze(const EntryList* list, VaultAuditReport* report) {
         return 1;
     }
 
-    int total_score_sum = 0;
-
     for (int i = 0; i < list->count; ++i) {
-        const Entry* entry = &list->entries[i];
-        int strength = password_calculate_strength(entry->password, 8);
-        total_score_sum += strength;
+        const Entry* e = &list->entries[i];
+        int score = password_calculate_strength(e->password, 8);
 
-        if (strlen(entry->password) < 8) {
-            report->short_count++;
+        if (strlen(e->password) < 8) {
+            report->short_passwords++;
         }
 
-        if (strength <= 2) {
-            report->weak_count++;
-        } else if (strength <= 4) {
-            report->medium_count++;
+        if (score >= 4) {
+            report->strong_passwords++;
+        } else if (score == 3) {
+            report->medium_passwords++;
         } else {
-            report->strong_count++;
+            report->weak_passwords++;
         }
 
-        int is_reused = 0;
-        for (int j = 0; j < list->count; ++j) {
-            if (i != j && strcmp(entry->password, list->entries[j].password) == 0) {
-                is_reused = 1;
+        /* Check for duplicate passwords across other entries */
+        int found_group = -1;
+        for (int g = 0; g < report->reused_groups_count; ++g) {
+            if (strcmp(report->reused_groups[g].password, e->password) == 0) {
+                found_group = g;
                 break;
             }
         }
 
-        if (is_reused) {
-            report->reused_count++;
-        }
-    }
+        if (found_group >= 0) {
+            ReusedPasswordGroup* grp = &report->reused_groups[found_group];
+            if (grp->count < 32) {
+                grp->entry_indices[grp->count] = i;
+                grp->count++;
+            }
+        } else {
+            /* Check if any previous entry matches */
+            int matches = 0;
+            int first_match_idx = -1;
+            for (int prev = 0; prev < i; ++prev) {
+                if (strcmp(list->entries[prev].password, e->password) == 0) {
+                    matches++;
+                    if (first_match_idx == -1) first_match_idx = prev;
+                }
+            }
 
-    /* Calculate unique passwords */
-    int unique_count = 0;
-    for (int i = 0; i < list->count; ++i) {
-        int first_seen = 1;
-        for (int j = 0; j < i; ++j) {
-            if (strcmp(list->entries[i].password, list->entries[j].password) == 0) {
-                first_seen = 0;
-                break;
+            if (matches > 0 && report->reused_groups_count < MAX_REUSED_GROUPS) {
+                ReusedPasswordGroup* grp = &report->reused_groups[report->reused_groups_count];
+                strncpy(grp->password, e->password, sizeof(grp->password) - 1);
+                grp->password[sizeof(grp->password) - 1] = '\0';
+                grp->entry_indices[0] = first_match_idx;
+                grp->entry_indices[1] = i;
+                grp->count = 2;
+                report->reused_groups_count++;
             }
         }
-        if (first_seen) {
-            unique_count++;
-        }
     }
-    report->unique_passwords = unique_count;
 
-    /* Health calculation: base strength (0-100) minus reused penalty */
-    double avg_strength_ratio = (double)total_score_sum / (list->count * 5.0);
-    double score = avg_strength_ratio * 100.0;
+    /* Health Score Calculation (0-100) */
+    int total = list->count;
+    int base_points = (report->strong_passwords * 100 + report->medium_passwords * 60) / total;
 
-    /* Deduct points for reused and short passwords */
-    double reused_ratio = (double)report->reused_count / list->count;
-    double short_ratio = (double)report->short_count / list->count;
+    int penalty = 0;
+    penalty += (report->weak_passwords * 20) / total;
+    penalty += (report->short_passwords * 25) / total;
+    penalty += (report->reused_groups_count * 15);
 
-    score -= (reused_ratio * 30.0);
-    score -= (short_ratio * 20.0);
+    int final_score = base_points - penalty;
+    if (final_score < 0) final_score = 0;
+    if (final_score > 100) final_score = 100;
 
-    if (score < 0.0) score = 0.0;
-    if (score > 100.0) score = 100.0;
-
-    report->health_score = (int)(score + 0.5);
+    report->health_score = final_score;
     return 1;
+}
+
+void audit_print_report(const VaultAuditReport* report) {
+    if (report == NULL) return;
+
+    printf("\n========================================\n");
+    printf("        VAULT SECURITY AUDIT            \n");
+    printf("========================================\n");
+    printf("Total Entries:      %d\n", report->total_entries);
+    printf("Strong Passwords:   %d\n", report->strong_passwords);
+    printf("Medium Passwords:   %d\n", report->medium_passwords);
+    printf("Weak Passwords:     %d\n", report->weak_passwords);
+    printf("Short (<8 chars):   %d\n", report->short_passwords);
+    printf("Reused Passwords:   %d group(s)\n", report->reused_groups_count);
+    printf("----------------------------------------\n");
+    printf("Overall Vault Health: %d%%\n", report->health_score);
+    printf("========================================\n");
 }

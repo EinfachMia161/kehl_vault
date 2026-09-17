@@ -4,7 +4,7 @@ cmake-build-*/
 # CLion / JetBrains
 .idea/
 .aiassistant
-
+.junie
 # Compiled binaries
 *.exe
 *.out
