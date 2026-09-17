@@ -35,46 +35,36 @@ int main() {
             "NochEinTest789!"
     );
 
-    std::cout << "Entries nach dem Hinzufuegen:\n";
-    std::cout << "-----------------------------\n";
-    entry_print_list(entries, entry_count);
-
-    int update_successful =
-            entry_update(
-                    entries,
-                    entry_count,
-                    1,
-                    "Geaendertes Schulkonto",
-                    "neuer-benutzername@example.com",
-                    "NeuesPasswort456!"
-            );
-
-    std::cout << "Bearbeiten: ";
-    if (update_successful == 1) {
-        std::cout << "erfolgreich.\n\n";
-    } else {
-        std::cout << "fehlgeschlagen.\n\n";
-    }
-
-    std::cout << "Entries nach dem Bearbeiten:\n";
+    std::cout << "Entries vor der Bearbeitung:\n";
     std::cout << "----------------------------\n";
     entry_print_list(entries, entry_count);
 
-    int invalid_update =
-            entry_update(
-                    entries,
-                    entry_count,
-                    5,
-                    "Ungueltiger Entry",
-                    "ungueltig@example.com",
-                    "WirdNichtGespeichert!"
-            );
+    Entry* selected_entry =
+            entry_get(entries, entry_count, 1);
 
-    std::cout << "Bearbeiten mit Index 5: ";
-    if (invalid_update == 1) {
-        std::cout << "erfolgreich.\n\n";
+    if (selected_entry != nullptr) {
+        std::cout << "Entry mit Index 1 wurde gefunden.\n";
+
+        entry_create(
+                selected_entry,
+                "Geaendertes Schulkonto",
+                "neuer-benutzername@example.com",
+                "NeuesPasswort456!"
+        );
     } else {
-        std::cout << "abgelehnt.\n\n";
+        std::cout << "Entry mit Index 1 wurde nicht gefunden.\n";
+    }
+
+    std::cout << "\n";
+    std::cout << "Entries nach der Bearbeitung:\n";
+    std::cout << "-----------------------------\n";
+    entry_print_list(entries, entry_count);
+
+    Entry* invalid_entry =
+            entry_get(entries, entry_count, 5);
+
+    if (invalid_entry == nullptr) {
+        std::cout << "Index 5 wurde korrekt abgelehnt.\n";
     }
 
     int remove_successful =
@@ -84,30 +74,18 @@ int main() {
                     0
             );
 
-    std::cout << "Loeschen von Entry 1: ";
+    std::cout << "\nEntry mit Index 0 loeschen: ";
+
     if (remove_successful == 1) {
-        std::cout << "erfolgreich.\n\n";
+        std::cout << "erfolgreich.\n";
     } else {
-        std::cout << "fehlgeschlagen.\n\n";
+        std::cout << "fehlgeschlagen.\n";
     }
 
+    std::cout << "\n";
     std::cout << "Entries nach dem Loeschen:\n";
     std::cout << "--------------------------\n";
     entry_print_list(entries, entry_count);
-
-    int invalid_remove =
-            entry_remove(
-                    entries,
-                    &entry_count,
-                    5
-            );
-
-    std::cout << "Loeschen mit Index 5: ";
-    if (invalid_remove == 1) {
-        std::cout << "erfolgreich.\n";
-    } else {
-        std::cout << "abgelehnt.\n";
-    }
 
     return 0;
 }

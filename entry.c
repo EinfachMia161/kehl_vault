@@ -69,6 +69,22 @@ int entry_add(
     return 1;
 }
 
+Entry* entry_get(
+        Entry entries[],
+        int entry_count,
+        int index
+) {
+    if (entries == NULL) {
+        return NULL;
+    }
+
+    if (index < 0 || index >= entry_count) {
+        return NULL;
+    }
+
+    return &entries[index];
+}
+
 int entry_update(
         Entry entries[],
         int entry_count,
@@ -77,19 +93,14 @@ int entry_update(
         const char* username,
         const char* password
 ) {
-    if (entries == NULL ||
-        title == NULL ||
-        username == NULL ||
-        password == NULL) {
-        return 0;
-    }
+    Entry* entry = entry_get(entries, entry_count, index);
 
-    if (index < 0 || index >= entry_count) {
+    if (entry == NULL) {
         return 0;
     }
 
     return entry_create(
-            &entries[index],
+            entry,
             title,
             username,
             password

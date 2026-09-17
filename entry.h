@@ -33,6 +33,12 @@ int entry_add(
         const char* password
 );
 
+Entry* entry_get(
+        Entry entries[],
+        int entry_count,
+        int index
+);
+
 int entry_update(
         Entry entries[],
         int entry_count,
